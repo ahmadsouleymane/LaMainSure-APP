@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+
+# expo / metro
+.expo/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+npm-debug.*
+yarn-error.log
+
+# env / secrets — jamais commit
+.env
+.env.local
+.env.*.local
+mobile/.env
+backend/.env
+
+# generated types
+mobile/lib/database.types.ts
+
+# certs / signing
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# os
+.DS_Store
+
+# supabase (cli local state)
+backend/supabase/.branches
+backend/supabase/.temp
+backend/supabase/.env

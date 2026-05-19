@@ -1,0 +1,16 @@
+import { StyleSheet, Text, View } from 'react-native';
+
+export default function Search() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Recherche</Text>
+      <Text style={styles.subtitle}>Pros à proximité (à venir)</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', padding: 24 },
+  title: { fontSize: 24, fontWeight: '700' },
+  subtitle: { fontSize: 14, color: '#666', marginTop: 8 },
+});
