@@ -1,19 +1,14 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Link } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { authErrorToFr, isValidEmail, passwordIssue } from '../../lib/errors';
+import { useTheme } from '../../lib/theme';
+import { Button, Display, TextField, TextLink, Wordmark } from '../../components/ui';
 
 export default function Signup() {
+  const router = useRouter();
+  const { t } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,112 +16,36 @@ export default function Signup() {
   const [info, setInfo] = useState<string | null>(null);
 
   async function onSubmit() {
-    setError(null);
-    setInfo(null);
-    if (!isValidEmail(email)) {
-      setError('Email invalide.');
-      return;
-    }
-    const pwIssue = passwordIssue(password);
-    if (pwIssue) {
-      setError(pwIssue);
-      return;
-    }
+    setError(null); setInfo(null);
+    if (!isValidEmail(email)) return setError('Email invalide.');
+    const pw = passwordIssue(password);
+    if (pw) return setError(pw);
     setLoading(true);
-    const { data, error: err } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-    });
+    const { data, error: err } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password });
     setLoading(false);
-    if (err) {
-      setError(authErrorToFr(err));
-      return;
-    }
-    if (!data.session) {
-      setInfo('Compte créé. Vérifie ton email pour confirmer ton adresse.');
-    }
+    if (err) return setError(authErrorToFr(err));
+    if (!data.session) setInfo('Compte créé. Vérifie ton email pour confirmer ton adresse.');
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flex}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Créer un compte</Text>
-        <Text style={styles.subtitle}>Rejoins La Main Sûre</Text>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: t.paper }}>
+      <View style={{ flex: 1, padding: 24, paddingTop: 56 }}>
+        <View style={{ marginBottom: 32 }}><Wordmark height={36} /></View>
+        <Display size={28} style={{ marginBottom: 6 }}>Créer un compte</Display>
+        <Text style={{ fontSize: 14, color: t.fg2, marginBottom: 24 }}>Rejoins La Main Sûre</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#999"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Mot de passe (8+ caractères, lettres et chiffres)"
-          placeholderTextColor="#999"
-          secureTextEntry
-          autoComplete="password-new"
-          textContentType="newPassword"
-          value={password}
-          onChangeText={setPassword}
-          editable={!loading}
-        />
+        <View style={{ gap: 12 }}>
+          <TextField value={email} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+          <TextField value={password} onChangeText={setPassword} placeholder="Mot de passe (8+ caractères, lettres et chiffres)" secureTextEntry editable={!loading} />
+          {error ? <Text style={{ color: t.danger, fontSize: 14 }}>{error}</Text> : null}
+          {info ? <Text style={{ color: t.success, fontSize: 14 }}>{info}</Text> : null}
+          <Button onPress={onSubmit} loading={loading} style={{ marginTop: 4 }}>Créer mon compte</Button>
+        </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {info ? <Text style={styles.info}>{info}</Text> : null}
-
-        <Pressable
-          accessibilityRole="button"
-          style={[styles.btn, loading && styles.btnDisabled]}
-          onPress={onSubmit}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Créer mon compte</Text>}
-        </Pressable>
-
-        <Link href="/(auth)/login" style={styles.link}>
-          <Text style={styles.linkText}>J'ai déjà un compte</Text>
-        </Link>
+        <View style={{ alignItems: 'center', marginTop: 20 }}>
+          <TextLink onPress={() => router.replace('/(auth)/login')}>J'ai déjà un compte</TextLink>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 24 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 12,
-    color: '#000',
-  },
-  error: { color: '#c00', marginBottom: 12, fontSize: 14 },
-  info: { color: '#0a7a3c', marginBottom: 12, fontSize: 14 },
-  btn: {
-    backgroundColor: '#111',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  link: { marginTop: 16, alignSelf: 'center' },
-  linkText: { color: '#0a66c2', fontSize: 14 },
-});

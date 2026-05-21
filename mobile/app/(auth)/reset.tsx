@@ -1,19 +1,14 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Link } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { authErrorToFr, isValidEmail } from '../../lib/errors';
+import { useTheme } from '../../lib/theme';
+import { Button, Display, TextField, TextLink, Wordmark } from '../../components/ui';
 
 export default function Reset() {
+  const router = useRouter();
+  const { t } = useTheme();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,103 +16,32 @@ export default function Reset() {
 
   async function onSubmit() {
     setError(null);
-    if (!isValidEmail(email)) {
-      setError('Email invalide.');
-      return;
-    }
+    if (!isValidEmail(email)) return setError('Email invalide.');
     setLoading(true);
-    // Toujours afficher "envoyé" même si l'email n'existe pas, pour éviter
-    // l'énumération de comptes.
-    const { error: err } = await supabase.auth.resetPasswordForEmail(
-      email.trim().toLowerCase(),
-      { redirectTo: 'lamainsure://reset' }
-    );
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: 'lamainsure://reset' });
     setLoading(false);
-    if (err && !/rate limit|too many/i.test(err.message)) {
-      // Affiche seulement les erreurs de rate-limit; sinon on prétend succès.
-      setSent(true);
-      return;
-    }
-    if (err) {
-      setError(authErrorToFr(err));
-      return;
-    }
+    if (err && /rate limit|too many/i.test(err.message)) return setError(authErrorToFr(err));
     setSent(true);
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flex}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Mot de passe oublié</Text>
-        <Text style={styles.subtitle}>On t'envoie un lien de réinitialisation par email.</Text>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: t.paper }}>
+      <View style={{ flex: 1, padding: 24, paddingTop: 56 }}>
+        <View style={{ marginBottom: 32 }}><Wordmark height={36} /></View>
+        <Display size={28} style={{ marginBottom: 6 }}>Mot de passe oublié</Display>
+        <Text style={{ fontSize: 14, color: t.fg2, marginBottom: 24 }}>On t'envoie un lien de réinitialisation par email.</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#999"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading && !sent}
-        />
+        <View style={{ gap: 12 }}>
+          <TextField value={email} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" autoCapitalize="none" editable={!loading && !sent} />
+          {error ? <Text style={{ color: t.danger, fontSize: 14 }}>{error}</Text> : null}
+          {sent ? <Text style={{ color: t.success, fontSize: 14 }}>Si un compte existe pour cet email, un lien vient d'être envoyé.</Text> : null}
+          {!sent && <Button onPress={onSubmit} loading={loading} style={{ marginTop: 4 }}>Envoyer le lien</Button>}
+        </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {sent ? (
-          <Text style={styles.info}>Si un compte existe pour cet email, un lien vient d'être envoyé.</Text>
-        ) : null}
-
-        {!sent && (
-          <Pressable
-            accessibilityRole="button"
-            style={[styles.btn, loading && styles.btnDisabled]}
-            onPress={onSubmit}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Envoyer le lien</Text>}
-          </Pressable>
-        )}
-
-        <Link href="/(auth)/login" style={styles.link}>
-          <Text style={styles.linkText}>Retour à la connexion</Text>
-        </Link>
+        <View style={{ alignItems: 'center', marginTop: 20 }}>
+          <TextLink onPress={() => router.replace('/(auth)/login')}>Retour à la connexion</TextLink>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 24 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 12,
-    color: '#000',
-  },
-  error: { color: '#c00', marginBottom: 12, fontSize: 14 },
-  info: { color: '#0a7a3c', marginBottom: 12, fontSize: 14 },
-  btn: {
-    backgroundColor: '#111',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  link: { marginTop: 16, alignSelf: 'center' },
-  linkText: { color: '#0a66c2', fontSize: 14 },
-});

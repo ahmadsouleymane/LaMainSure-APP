@@ -1,19 +1,14 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Link } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { authErrorToFr, isValidEmail } from '../../lib/errors';
+import { useTheme } from '../../lib/theme';
+import { Button, Display, TextField, TextLink, Wordmark } from '../../components/ui';
 
 export default function Login() {
+  const router = useRouter();
+  const { t } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,14 +16,8 @@ export default function Login() {
 
   async function onSubmit() {
     setError(null);
-    if (!isValidEmail(email)) {
-      setError('Email invalide.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Mot de passe trop court.');
-      return;
-    }
+    if (!isValidEmail(email)) return setError('Email invalide.');
+    if (password.length < 8) return setError('Mot de passe trop court.');
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
@@ -39,86 +28,30 @@ export default function Login() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flex}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Se connecter</Text>
-        <Text style={styles.subtitle}>Bienvenue sur La Main Sûre</Text>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: t.paper }}>
+      <View style={{ flex: 1, padding: 24, paddingTop: 56 }}>
+        <View style={{ marginBottom: 32 }}><Wordmark height={36} /></View>
+        <Display size={28} style={{ marginBottom: 6 }}>Se connecter</Display>
+        <Text style={{ fontSize: 14, color: t.fg2, marginBottom: 24 }}>Bienvenue sur La Main Sûre</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#999"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Mot de passe"
-          placeholderTextColor="#999"
-          secureTextEntry
-          autoComplete="password"
-          textContentType="password"
-          value={password}
-          onChangeText={setPassword}
-          editable={!loading}
-        />
+        <View style={{ gap: 12 }}>
+          <TextField value={email} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+          <TextField value={password} onChangeText={setPassword} placeholder="Mot de passe" secureTextEntry editable={!loading} />
+          {error ? <Text style={{ color: t.danger, fontSize: 14 }}>{error}</Text> : null}
+          <Button onPress={onSubmit} loading={loading} style={{ marginTop: 4 }}>Se connecter</Button>
+        </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <View style={{ alignItems: 'center', gap: 12, marginTop: 20 }}>
+          <TextLink onPress={() => router.push('/(auth)/reset')}>Mot de passe oublié ?</TextLink>
+          <TextLink onPress={() => router.push('/(auth)/signup')}>Créer un compte</TextLink>
+        </View>
 
-        <Pressable
-          accessibilityRole="button"
-          style={[styles.btn, loading && styles.btnDisabled]}
-          onPress={onSubmit}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Se connecter</Text>}
-        </Pressable>
+        <View style={{ flex: 1 }} />
 
-        <Link href="/(auth)/reset" style={styles.link}>
-          <Text style={styles.linkText}>Mot de passe oublié ?</Text>
-        </Link>
-        <Link href="/(auth)/signup" style={styles.link}>
-          <Text style={styles.linkText}>Créer un compte</Text>
-        </Link>
+        <Text style={{ fontSize: 12, color: t.fg3, textAlign: 'center', marginTop: 24 }}>
+          Une question ? <Text style={{ color: t.link }}>aide@lamainsure.app</Text>
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 24 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 12,
-    color: '#000',
-  },
-  error: { color: '#c00', marginBottom: 12, fontSize: 14 },
-  btn: {
-    backgroundColor: '#111',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  link: { marginTop: 16, alignSelf: 'center' },
-  linkText: { color: '#0a66c2', fontSize: 14 },
-});
