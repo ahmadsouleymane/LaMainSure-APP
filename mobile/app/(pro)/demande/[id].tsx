@@ -1,20 +1,72 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../../lib/theme';
-import { PRO_INBOX, fmtFcfa } from '../../../lib/mock-data';
+import { fmtFcfa } from '../../../lib/mock-data';
+import { fetchBooking, sendQuote, cancelBooking, startWork, completeBooking, type BookingDetail } from '../../../lib/api';
 import { AppHeader, Avatar, Badge, Button, Display, Icon, PortfolioTile, SectionTitle } from '../../../components/ui';
 
 export default function DemandeDetail() {
   const router = useRouter();
   const { t } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const d = PRO_INBOX.find((x) => x.id === id) || PRO_INBOX[0];
+  const [b, setB] = useState<BookingDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   const [view, setView] = useState<'detail' | 'propose'>('detail');
-  const [price, setPrice] = useState(d.service.includes('chauffe-eau') ? '45000' : '20000');
-  const [eta, setEta] = useState("Aujourd'hui · 14:00");
+  const [price, setPrice] = useState('20000');
   const [note, setNote] = useState('');
+
+  const load = () => { if (id) { setLoading(true); fetchBooking(id).then((x) => { setB(x); if (x?.quotedPrice) setPrice(String(x.quotedPrice)); }).catch(() => {}).finally(() => setLoading(false)); } };
+  useEffect(load, [id]);
+
+  if (loading || !b) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.paper }}>
+        <AppHeader title="Demande" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          {loading ? <ActivityIndicator color={t.ink} /> : <Text style={{ color: t.fg2 }}>Demande introuvable.</Text>}
+        </View>
+      </View>
+    );
+  }
+
+  const d = {
+    clientName: b.clientName,
+    clientAvatar: b.clientAvatar,
+    service: b.service,
+    description: b.description,
+    address: b.address,
+    budget: b.quotedPrice ? fmtFcfa(b.quotedPrice) : 'À discuter',
+    createdAt: b.createdAt,
+    photos: b.photos.length,
+    urgency: b.description.includes('[Urgent') ? 'Urgent' : undefined,
+  };
+
+  const submitQuote = async () => {
+    const p = Number(price);
+    if (!Number.isFinite(p) || p < 0 || busy) return;
+    setBusy(true);
+    try { await sendQuote(b.id, p); router.back(); }
+    catch (e) { Alert.alert('Erreur', e instanceof Error ? e.message : 'Envoi impossible.'); setBusy(false); }
+  };
+
+  const refuse = async () => {
+    setBusy(true);
+    try { await cancelBooking(b.id); router.back(); }
+    catch (e) { Alert.alert('Erreur', e instanceof Error ? e.message : 'Action impossible.'); setBusy(false); }
+  };
+
+  const advance = async () => {
+    setBusy(true);
+    try {
+      if (b.status === 'accepted') await startWork(b.id);
+      else if (b.status === 'in_progress') await completeBooking(b.id);
+      load();
+    } catch (e) { Alert.alert('Erreur', e instanceof Error ? e.message : 'Action impossible.'); }
+    finally { setBusy(false); }
+  };
 
   if (view === 'propose') {
     return (
@@ -41,22 +93,6 @@ export default function DemandeDetail() {
             </Text>
           </View>
 
-          <SectionTitle title="Disponibilité proposée" />
-          <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap' }}>
-            {["Aujourd'hui · 14:00", "Aujourd'hui · 16:30", 'Demain · 09:00', 'Demain · 14:00'].map((slot) => (
-              <View key={slot} style={{ width: '50%', padding: 4 }}>
-                <Pressable onPress={() => setEta(slot)} style={{
-                  paddingVertical: 12, paddingHorizontal: 10, borderRadius: 10,
-                  borderWidth: 1.5, borderColor: eta === slot ? t.ink : t.line,
-                  backgroundColor: eta === slot ? t.ink : t.paper,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ color: eta === slot ? t.paper : t.ink, fontSize: 13, fontWeight: '600' }}>{slot}</Text>
-                </Pressable>
-              </View>
-            ))}
-          </View>
-
           <SectionTitle title="Message (optionnel)" />
           <View style={{ paddingHorizontal: 20 }}>
             <TextInput value={note} onChangeText={setNote} multiline
@@ -66,7 +102,7 @@ export default function DemandeDetail() {
         </ScrollView>
 
         <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: t.lineSoft, backgroundColor: t.paper }}>
-          <Button onPress={() => router.back()}>Envoyer le devis</Button>
+          <Button loading={busy} onPress={submitQuote}>Envoyer le devis</Button>
         </View>
       </View>
     );
@@ -75,7 +111,7 @@ export default function DemandeDetail() {
   return (
     <View style={{ flex: 1, backgroundColor: t.paper }}>
       <AppHeader title="Demande" onBack={() => router.back()} right={
-        <Pressable hitSlop={8}><Icon name="message-circle" size={22} color={t.ink} /></Pressable>
+        b.conversationId ? <Pressable hitSlop={8} onPress={() => router.push(`/(app)/chat/${b.conversationId}`)}><Icon name="message-circle" size={22} color={t.ink} /></Pressable> : undefined
       } />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ paddingHorizontal: 20, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -119,11 +155,19 @@ export default function DemandeDetail() {
       </ScrollView>
 
       <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: t.lineSoft, backgroundColor: t.paper, gap: 8 }}>
-        <Button onPress={() => router.back()}>Accepter</Button>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Button variant="outline" onPress={() => setView('propose')} style={{ flex: 1 }}>Proposer un devis</Button>
-          <Button variant="ghost" onPress={() => router.back()} style={{ flex: 1 }}>Refuser</Button>
-        </View>
+        {(b.status === 'requested' || b.status === 'quoted') && (
+          <>
+            <Button onPress={() => setView('propose')}>{b.status === 'quoted' ? 'Modifier le devis' : 'Proposer un devis'}</Button>
+            <Button variant="ghost" loading={busy} onPress={refuse}>Refuser</Button>
+          </>
+        )}
+        {b.status === 'accepted' && <Button loading={busy} onPress={advance}>Démarrer la mission</Button>}
+        {b.status === 'in_progress' && <Button loading={busy} onPress={advance}>Marquer comme terminée</Button>}
+        {(b.status === 'completed' || b.status === 'cancelled') && (
+          <Text style={{ textAlign: 'center', color: t.fg2, fontSize: 13, paddingVertical: 6 }}>
+            {b.status === 'completed' ? 'Mission terminée.' : 'Demande annulée.'}
+          </Text>
+        )}
       </View>
     </View>
   );

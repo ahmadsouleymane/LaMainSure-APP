@@ -1,30 +1,47 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../../lib/theme';
-import { CONVERSATIONS, PROS } from '../../../lib/mock-data';
+import { useAuth } from '../../../lib/auth';
+import { fetchConversations, type ConversationSummary } from '../../../lib/api';
 import { Avatar, Display } from '../../../components/ui';
 
 export default function Messages() {
   const router = useRouter();
   const { t } = useTheme();
+  const { session } = useAuth();
+  const myId = session?.user.id ?? '';
+  const [convs, setConvs] = useState<ConversationSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(useCallback(() => {
+    if (!myId) return;
+    let alive = true;
+    setLoading(true);
+    fetchConversations(myId).then((c) => { if (alive) setConvs(c); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [myId]));
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: t.paper }} contentContainerStyle={{ paddingTop: 8 }} showsVerticalScrollIndicator={false}>
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 }}>
         <Display size={26}>Messages</Display>
       </View>
-      <View>
-        {CONVERSATIONS.map((c, i) => {
-          const pro = PROS.find((p) => p.id === c.proId)!;
-          return (
+      {loading ? (
+        <ActivityIndicator color={t.ink} style={{ marginTop: 40 }} />
+      ) : convs.length === 0 ? (
+        <Text style={{ paddingHorizontal: 20, paddingVertical: 40, textAlign: 'center', color: t.fg3, fontSize: 14 }}>Aucune conversation pour l'instant.</Text>
+      ) : (
+        <View>
+          {convs.map((c, i) => (
             <Pressable key={c.id} onPress={() => router.push(`/(app)/chat/${c.id}`)} style={{
               flexDirection: 'row', gap: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center',
               borderTopWidth: i > 0 ? 1 : 0, borderTopColor: t.lineSoft,
             }}>
-              <Avatar name={pro.fullName} size={48} accent={pro.accent} image={pro.avatar} />
+              <Avatar name={c.otherName} size={48} image={c.otherAvatar || undefined} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 15, fontWeight: c.unread ? '700' : '600', color: t.ink }}>{c.proName}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: c.unread ? '700' : '600', color: t.ink }}>{c.otherName}</Text>
                   <Text style={{ fontSize: 12, color: c.unread ? t.ink : t.fg3, fontWeight: c.unread ? '600' : '400' }}>{c.time}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 8 }}>
@@ -37,9 +54,9 @@ export default function Messages() {
                 </View>
               </View>
             </Pressable>
-          );
-        })}
-      </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }

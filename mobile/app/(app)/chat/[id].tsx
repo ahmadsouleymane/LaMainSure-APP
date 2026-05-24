@@ -1,64 +1,115 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../../lib/theme';
-import { CONVERSATIONS, MESSAGES_C1, PROS, type ChatMessage } from '../../../lib/mock-data';
+import { fmtFcfa } from '../../../lib/mock-data';
+import { useAuth } from '../../../lib/auth';
+import {
+  fetchConversationContext, fetchMessages, sendMessage, markMessagesRead, subscribeMessages, acceptQuote,
+  type ChatMsg, type ConversationContext,
+} from '../../../lib/api';
 import { Avatar, Icon } from '../../../components/ui';
 
 export default function Chat() {
   const router = useRouter();
   const { t } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const conv = CONVERSATIONS.find((c) => c.id === id) || CONVERSATIONS[0];
-  const pro = PROS.find((p) => p.id === conv.proId)!;
-  const [messages, setMessages] = useState<ChatMessage[]>(MESSAGES_C1);
+  const { session } = useAuth();
+  const myId = session?.user.id ?? '';
+  const [ctx, setCtx] = useState<ConversationContext | null>(null);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
 
-  const send = () => {
-    if (!text.trim()) return;
-    setMessages((m) => [...m, { id: Date.now(), from: 'me', text: text.trim(), time: 'maintenant' }]);
+  const refreshCtx = () => { if (id && myId) fetchConversationContext(id, myId).then(setCtx).catch(() => {}); };
+
+  useEffect(() => {
+    if (!id || !myId) return;
+    setLoading(true);
+    Promise.all([fetchConversationContext(id, myId), fetchMessages(id)])
+      .then(([c, m]) => { setCtx(c); setMessages(m); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    markMessagesRead(id, myId).catch(() => {});
+    const unsub = subscribeMessages(id, (m) => {
+      setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
+      if (m.senderId !== myId) markMessagesRead(id, myId).catch(() => {});
+    });
+    return unsub;
+  }, [id, myId]);
+
+  const send = async () => {
+    const body = text.trim();
+    if (!body || !id || !myId || sending) return;
     setText('');
+    setSending(true);
+    try {
+      const m = await sendMessage(id, myId, body);
+      setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
+    } catch (e) {
+      setText(body);
+      Alert.alert('Erreur', e instanceof Error ? e.message : "Message non envoyé.");
+    } finally {
+      setSending(false);
+    }
   };
 
+  const onAcceptQuote = async () => {
+    if (!ctx) return;
+    try { await acceptQuote(ctx.bookingId); refreshCtx(); }
+    catch (e) { Alert.alert('Erreur', e instanceof Error ? e.message : 'Action impossible.'); }
+  };
+
+  const showQuoteBanner = ctx?.amClient && ctx.status === 'quoted' && ctx.quotedPrice != null;
+
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: t.paper }}>
+    <View style={{ flex: 1, backgroundColor: t.paper }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.lineSoft }}>
         <Pressable onPress={() => router.back()} hitSlop={10}>
           <Icon name="chevron-left" size={28} color={t.ink} />
         </Pressable>
-        <Avatar name={pro.fullName} size={32} accent={pro.accent} image={pro.avatar} />
+        <Avatar name={ctx?.otherName ?? ''} size={32} image={ctx?.otherAvatar || undefined} />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: t.ink }}>{pro.name}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: t.success }} />
-            <Text style={{ fontSize: 11, color: t.success }}>en ligne</Text>
-          </View>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: t.ink }}>{ctx?.otherName ?? '…'}</Text>
         </View>
-        <Pressable hitSlop={8}><Icon name="more-horizontal" size={22} color={t.ink} /></Pressable>
       </View>
 
-      <ScrollView style={{ flex: 1, backgroundColor: t.paperSoft }} contentContainerStyle={{ padding: 14, gap: 6 }}>
-        <View style={{ alignSelf: 'center', backgroundColor: t.paper, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginBottom: 6 }}>
-          <Text style={{ fontSize: 11, color: t.fg3 }}>Aujourd'hui · 11:30</Text>
-        </View>
-        {messages.map((m) => {
-          const mine = m.from === 'me';
+      {showQuoteBanner && (
+        <Pressable onPress={onAcceptQuote} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: t.accentSoft }}>
+          <Icon name="file-text" size={18} color={t.accentInk} />
+          <Text style={{ flex: 1, color: t.accentInk, fontSize: 13, fontWeight: '600' }}>Devis reçu · {fmtFcfa(ctx!.quotedPrice!)}</Text>
+          <View style={{ backgroundColor: t.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Accepter</Text>
+          </View>
+        </Pressable>
+      )}
+
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1, backgroundColor: t.paperSoft }}
+        contentContainerStyle={{ padding: 14, gap: 6 }}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
+        {loading ? (
+          <ActivityIndicator color={t.ink} style={{ marginTop: 30 }} />
+        ) : messages.length === 0 ? (
+          <Text style={{ textAlign: 'center', color: t.fg3, fontSize: 13, marginTop: 30 }}>Démarre la conversation.</Text>
+        ) : messages.map((m) => {
+          const mine = m.senderId === myId;
           return (
             <View key={m.id} style={{
               alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%',
               backgroundColor: mine ? t.ink : t.paper,
               paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14,
             }}>
-              <Text style={{ color: mine ? t.paper : t.ink, fontSize: 14, lineHeight: 19 }}>{m.text}</Text>
+              <Text style={{ color: mine ? t.paper : t.ink, fontSize: 14, lineHeight: 19 }}>{m.body}</Text>
             </View>
           );
         })}
       </ScrollView>
 
       <View style={{ paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.lineSoft, backgroundColor: t.paper, flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-        <Pressable style={{ width: 38, height: 38, borderRadius: 999, backgroundColor: t.paperSoft, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="plus" size={20} color={t.ink} />
-        </Pressable>
         <TextInput value={text} onChangeText={setText} onSubmitEditing={send} placeholder="Message" placeholderTextColor={t.fg3}
           style={{ flex: 1, borderWidth: 1, borderColor: t.line, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, color: t.ink, backgroundColor: t.paper }} />
         <Pressable onPress={send} style={{
@@ -69,6 +120,6 @@ export default function Chat() {
           <Icon name="send" size={18} color={text.trim() ? t.paper : t.fg3} />
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

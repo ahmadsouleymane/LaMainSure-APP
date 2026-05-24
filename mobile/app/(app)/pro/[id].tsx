@@ -1,18 +1,38 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../../lib/theme';
-import { ICON_FOR_TAG, PROS, REVIEWS_RECEIVED, fmtFcfa } from '../../../lib/mock-data';
+import { fmtFcfa, type Pro, type Review } from '../../../lib/mock-data';
+import { fetchProDetail, fetchProReviews } from '../../../lib/api';
 import { AppHeader, Avatar, Badge, Button, Display, Icon, PortfolioTile, Rating, SectionTitle } from '../../../components/ui';
-
-type Variant = 'balanced' | 'photos' | 'reviews' | 'pricing';
 
 export default function ProDetail() {
   const router = useRouter();
   const { t } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const pro = PROS.find((p) => p.id === id) || PROS[0];
-  const [variant] = useState<Variant>('balanced');
+  const [pro, setPro] = useState<Pro | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    Promise.all([fetchProDetail(id), fetchProReviews(id)])
+      .then(([p, rv]) => { setPro(p); setReviews(rv); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading || !pro) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.paper }}>
+        <AppHeader title="" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          {loading ? <ActivityIndicator color={t.ink} /> : <Text style={{ color: t.fg2 }}>Artisan introuvable.</Text>}
+        </View>
+      </View>
+    );
+  }
 
   const HeaderBlock = () => (
     <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 18, alignItems: 'center', gap: 10 }}>
@@ -60,6 +80,7 @@ export default function ProDetail() {
   );
 
   const AvailabilityBlock = () => (
+    pro.availability.length === 0 ? null :
     <>
       <SectionTitle title="Prochaines disponibilités" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingBottom: 8 }}>
@@ -91,9 +112,11 @@ export default function ProDetail() {
 
   const ReviewsBlock = ({ count = 2 }: { count?: number }) => (
     <>
-      <SectionTitle title={`Avis · ${pro.reviews}`} right={<Text style={{ fontSize: 13, color: t.link }}>Tout voir</Text>} />
+      <SectionTitle title={`Avis · ${pro.reviews}`} />
       <View style={{ paddingHorizontal: 20, gap: 12, paddingBottom: 24 }}>
-        {REVIEWS_RECEIVED.slice(0, count).map((r, i) => (
+        {reviews.length === 0 ? (
+          <Text style={{ fontSize: 13, color: t.fg2 }}>Pas encore d'avis.</Text>
+        ) : reviews.slice(0, count).map((r, i) => (
           <View key={r.id} style={{ paddingVertical: 12, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: t.lineSoft }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>{r.clientName}</Text>
@@ -110,7 +133,7 @@ export default function ProDetail() {
   return (
     <View style={{ flex: 1, backgroundColor: t.paper }}>
       <AppHeader title="" onBack={() => router.back()} right={
-        <Pressable hitSlop={8}><Icon name="share-2" size={22} color={t.ink} /></Pressable>
+        <Pressable hitSlop={8} onPress={() => Share.share({ message: `${pro.name} sur La Main Sûre — ${pro.tags.join(', ')}${pro.city ? ` · ${pro.city}` : ''}` })}><Icon name="share-2" size={22} color={t.ink} /></Pressable>
       } />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <HeaderBlock />
@@ -122,7 +145,7 @@ export default function ProDetail() {
       </ScrollView>
 
       <View style={{ flexDirection: 'row', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: t.lineSoft, backgroundColor: t.paper }}>
-        <Pressable onPress={() => router.push(`/(app)/chat/c1`)} style={{
+        <Pressable onPress={() => router.push(`/(app)/devis/${pro.id}`)} style={{
           width: 48, height: 48, borderRadius: 10, borderWidth: 1, borderColor: t.line,
           alignItems: 'center', justifyContent: 'center',
         }}>

@@ -1,26 +1,42 @@
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '../../../lib/theme';
-import { PRO_INBOX, PRO_STATS, fmtFcfa } from '../../../lib/mock-data';
+import { fmtFcfa } from '../../../lib/mock-data';
+import { useProfile } from '../../../lib/profile';
+import { fetchProStats, fetchProInbox, type ProStats, type ProInbox } from '../../../lib/api';
 import { Avatar, Badge, Display, Icon, SectionTitle } from '../../../components/ui';
+
+const EMPTY_STATS: ProStats = { monthRevenue: 0, acceptedRequests: 0, pendingRequests: 0, responseRate: 100, averageRating: 0, totalReviews: 0 };
 
 export default function ProDashboard() {
   const router = useRouter();
   const { t } = useTheme();
-  const s = PRO_STATS;
+  const { profile } = useProfile();
+  const [s, setS] = useState<ProStats>(EMPTY_STATS);
+  const [inbox, setInbox] = useState<ProInbox[]>([]);
+  const firstName = (profile?.full_name || '').split(' ')[0] || '';
+
+  useFocusEffect(useCallback(() => {
+    if (!profile) return;
+    let alive = true;
+    fetchProStats(profile.id).then((x) => { if (alive) setS(x); }).catch(() => {});
+    fetchProInbox().then((x) => { if (alive) setInbox(x); }).catch(() => {});
+    return () => { alive = false; };
+  }, [profile?.id]));
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: t.paperSoft }} contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', backgroundColor: t.paper }}>
         <View>
           <Text style={{ fontSize: 12, color: t.fg2 }}>Bonjour</Text>
-          <Display size={22}>Moussa Diallo</Display>
+          <Display size={22}>{firstName || 'Artisan'}</Display>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
             <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: t.success }} />
             <Text style={{ fontSize: 12, color: t.fg2 }}>Disponible aujourd'hui</Text>
           </View>
         </View>
-        <Pressable style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: t.paperSoft, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <Pressable onPress={() => router.push('/(app)/notifications')} style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: t.paperSoft, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <Icon name="bell" size={20} color={t.ink} />
           <View style={{ position: 'absolute', top: 6, right: 7, width: 8, height: 8, borderRadius: 999, backgroundColor: t.accent, borderWidth: 2, borderColor: t.paperSoft }} />
         </Pressable>
@@ -35,9 +51,8 @@ export default function ProDashboard() {
                 {fmtFcfa(s.monthRevenue)}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                <Icon name="trending-up" size={14} color="#7be095" />
-                <Text style={{ fontSize: 12, color: '#7be095', fontWeight: '600' }}>+{s.monthRevenueDelta}%</Text>
-                <Text style={{ fontSize: 12, color: '#fff', opacity: 0.6 }}>vs mois dernier</Text>
+                <Icon name="check-circle" size={14} color="#7be095" />
+                <Text style={{ fontSize: 12, color: '#fff', opacity: 0.6 }}>{s.acceptedRequests} mission{s.acceptedRequests > 1 ? 's' : ''} en cours ou terminées</Text>
               </View>
             </View>
             <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -69,13 +84,16 @@ export default function ProDashboard() {
         </View>
       </View>
 
-      <SectionTitle title={`Nouvelles demandes · ${PRO_INBOX.filter((d) => d.status === 'new').length}`} right={
+      <SectionTitle title={`Nouvelles demandes · ${inbox.filter((d) => d.status === 'new').length}`} right={
         <Pressable onPress={() => router.push('/(pro)/(tabs)/demandes')} hitSlop={8}>
           <Text style={{ fontSize: 13, color: t.link }}>Voir tout</Text>
         </Pressable>
       } />
       <View style={{ paddingHorizontal: 20, gap: 8 }}>
-        {PRO_INBOX.map((d) => {
+        {inbox.length === 0 && (
+          <Text style={{ paddingVertical: 16, color: t.fg3, fontSize: 14 }}>Aucune nouvelle demande.</Text>
+        )}
+        {inbox.map((d) => {
           const isNew = d.status === 'new';
           return (
             <Pressable key={d.id} onPress={() => router.push(`/(pro)/demande/${d.id}`)} style={{

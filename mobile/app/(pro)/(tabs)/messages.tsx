@@ -1,18 +1,31 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme, fonts } from '../../../lib/theme';
-import { PRO_CONVERSATIONS } from '../../../lib/mock-data';
-import { Display, Icon } from '../../../components/ui';
+import { useAuth } from '../../../lib/auth';
+import { fetchConversations, type ConversationSummary } from '../../../lib/api';
+import { Avatar, Display, Icon } from '../../../components/ui';
 
 export default function ProMessages() {
   const router = useRouter();
   const { t } = useTheme();
+  const { session } = useAuth();
+  const myId = session?.user.id ?? '';
   const [query, setQuery] = useState('');
-  const unreadTotal = PRO_CONVERSATIONS.reduce((a, c) => a + c.unread, 0);
+  const [convs, setConvs] = useState<ConversationSummary[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const list = PRO_CONVERSATIONS.filter((c) =>
-    !query || c.clientName.toLowerCase().includes(query.toLowerCase()) || c.service.toLowerCase().includes(query.toLowerCase()),
+  useFocusEffect(useCallback(() => {
+    if (!myId) return;
+    let alive = true;
+    setLoading(true);
+    fetchConversations(myId).then((c) => { if (alive) setConvs(c); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [myId]));
+
+  const unreadTotal = convs.reduce((a, c) => a + c.unread, 0);
+  const list = convs.filter((c) =>
+    !query || c.otherName.toLowerCase().includes(query.toLowerCase()) || c.service.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
@@ -42,7 +55,9 @@ export default function ProMessages() {
       </View>
 
       <View>
-        {list.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator color={t.ink} style={{ marginTop: 40 }} />
+        ) : list.length === 0 ? (
           <View style={{ paddingVertical: 60, alignItems: 'center', gap: 8 }}>
             <View style={{ width: 56, height: 56, borderRadius: 999, backgroundColor: t.paperSoft, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="message-circle" size={26} color={t.fg3} />
@@ -52,19 +67,17 @@ export default function ProMessages() {
         ) : list.map((c, i) => (
           <Pressable
             key={c.id}
-            onPress={() => router.push(`/(app)/chat/c1`)}
+            onPress={() => router.push(`/(app)/chat/${c.id}`)}
             style={({ pressed }) => ({
               flexDirection: 'row', gap: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center',
               borderTopWidth: i > 0 ? 1 : 0, borderTopColor: t.lineSoft,
               backgroundColor: pressed ? t.paperSoft : t.paper,
             })}>
-            <View style={{ width: 48, height: 48, borderRadius: 999, backgroundColor: c.unread > 0 ? t.accent : t.paperSoft, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 15, fontFamily: fonts.sansBold, color: c.unread > 0 ? '#fff' : t.ink }}>{c.clientInitials}</Text>
-            </View>
+            <Avatar name={c.otherName} size={48} image={c.otherAvatar || undefined} accent={c.unread > 0} />
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text numberOfLines={1} style={{ fontSize: 15, fontFamily: c.unread > 0 ? fonts.sansBold : fonts.sansSemibold, color: t.ink, flexShrink: 1 }}>
-                  {c.clientName}
+                  {c.otherName}
                 </Text>
                 <Text style={{ fontSize: 12, color: c.unread > 0 ? t.ink : t.fg3, fontFamily: c.unread > 0 ? fonts.sansSemibold : fonts.sansRegular, marginLeft: 8 }}>
                   {c.time}

@@ -1,23 +1,34 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTheme } from '../../../lib/theme';
-import { REVIEWS_RECEIVED } from '../../../lib/mock-data';
+import { type Review } from '../../../lib/mock-data';
+import { useProfile } from '../../../lib/profile';
+import { fetchProReviews } from '../../../lib/api';
 import { AppHeader, Avatar, CategoryChip, Icon, Rating } from '../../../components/ui';
 
 export default function ProReviews() {
   const { t } = useTheme();
+  const { profile } = useProfile();
   const [filter, setFilter] = useState<'all' | '5' | '4' | 'low'>('all');
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!profile) return;
+    setLoading(true);
+    fetchProReviews(profile.id).then(setReviews).catch(() => {}).finally(() => setLoading(false));
+  }, [profile?.id]);
 
   const dist = {
-    5: REVIEWS_RECEIVED.filter((r) => r.rating === 5).length,
-    4: REVIEWS_RECEIVED.filter((r) => r.rating === 4).length,
-    3: REVIEWS_RECEIVED.filter((r) => r.rating === 3).length,
-    2: REVIEWS_RECEIVED.filter((r) => r.rating === 2).length,
-    1: REVIEWS_RECEIVED.filter((r) => r.rating === 1).length,
+    5: reviews.filter((r) => r.rating === 5).length,
+    4: reviews.filter((r) => r.rating === 4).length,
+    3: reviews.filter((r) => r.rating === 3).length,
+    2: reviews.filter((r) => r.rating === 2).length,
+    1: reviews.filter((r) => r.rating === 1).length,
   };
-  const total = REVIEWS_RECEIVED.length;
-  const avg = REVIEWS_RECEIVED.reduce((a, r) => a + r.rating, 0) / total;
-  const list = REVIEWS_RECEIVED.filter((r) => {
+  const total = reviews.length;
+  const avg = total > 0 ? reviews.reduce((a, r) => a + r.rating, 0) / total : 0;
+  const list = reviews.filter((r) => {
     if (filter === 'all') return true;
     if (filter === 'low') return r.rating <= 3;
     return r.rating === parseInt(filter, 10);
@@ -64,7 +75,11 @@ export default function ProReviews() {
         </ScrollView>
 
         <View style={{ paddingHorizontal: 20, gap: 12 }}>
-          {list.map((r) => (
+          {loading ? (
+            <ActivityIndicator color={t.ink} style={{ paddingVertical: 30 }} />
+          ) : list.length === 0 ? (
+            <Text style={{ paddingVertical: 24, textAlign: 'center', color: t.fg3, fontSize: 14 }}>Pas encore d'avis.</Text>
+          ) : list.map((r) => (
             <View key={r.id} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: t.lineSoft, backgroundColor: t.paper }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flex: 1 }}>
@@ -83,7 +98,7 @@ export default function ProReviews() {
                   <Text style={{ fontSize: 13, color: t.ink, marginTop: 4, lineHeight: 18 }}>{r.proReply}</Text>
                 </View>
               ) : (
-                <Pressable style={{ marginTop: 10, alignSelf: 'flex-start', borderWidth: 1, borderColor: t.line, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Pressable onPress={() => Alert.alert('Bientôt', 'La réponse aux avis arrive prochainement.')} style={{ marginTop: 10, alignSelf: 'flex-start', borderWidth: 1, borderColor: t.line, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Icon name="corner-down-right" size={14} color={t.ink} />
                   <Text style={{ color: t.ink, fontSize: 13, fontWeight: '500' }}>Répondre</Text>
                 </Pressable>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme, fonts } from '../../../lib/theme';
 import { CATEGORIES } from '../../../lib/mock-data';
@@ -104,7 +104,9 @@ export default function Search() {
       </Text>
 
       <View style={{ paddingHorizontal: 20 }}>
-        {filter.filtered.length === 0 ? (
+        {filter.loading ? (
+          <ActivityIndicator color={t.ink} style={{ paddingVertical: 40 }} />
+        ) : filter.filtered.length === 0 ? (
           <Text style={{ paddingVertical: 40, textAlign: 'center', color: t.fg3, fontSize: 14 }}>Aucun artisan pour cette recherche.</Text>
         ) : filter.filtered.map((pro, i) => (
           <ProCard key={pro.id} pro={pro} divider={i < filter.filtered.length - 1} onPress={() => router.push(`/(app)/pro/${pro.id}`)} />

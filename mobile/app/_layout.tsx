@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Text as RNText, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Text as RNText, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
@@ -19,6 +19,8 @@ import {
 import { AuthProvider, useAuth } from '../lib/auth';
 import { ThemeProvider, useTheme } from '../lib/theme';
 import { RoleProvider, useRole } from '../lib/role';
+import { ProfileProvider } from '../lib/profile';
+import { LocationProvider } from '../lib/location';
 
 function AuthGate() {
   const { session, loading } = useAuth();
@@ -36,7 +38,7 @@ function AuthGate() {
       router.replace('/(onboarding)/splash');
     } else if (session) {
       if (inAuth || inOnboarding) {
-        router.replace(role === 'pro' ? '/(pro)' : '/(app)');
+        router.replace(role === 'pro' ? '/(pro)' : '/(app)/(tabs)/search');
       }
     }
   }, [session, loading, segments, router, role]);
@@ -82,12 +84,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <RoleProvider>
-            <AuthProvider>
-              <StatusBar style="auto" />
-              <SafeAreaShell />
-            </AuthProvider>
-          </RoleProvider>
+          <AuthProvider>
+            <ProfileProvider>
+              <RoleProvider>
+                <LocationProvider>
+                  <StatusBar style="auto" />
+                  <SafeAreaShell />
+                </LocationProvider>
+              </RoleProvider>
+            </ProfileProvider>
+          </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -102,7 +108,10 @@ function SafeAreaShell() {
   const bg = isSplash ? '#040f0f' : t.paper;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={isSplash ? ['left', 'right'] : ['top', 'left', 'right']}>
-      <AuthGate />
+      {/* Évitement clavier global : une seule source pour toute l'app. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <AuthGate />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

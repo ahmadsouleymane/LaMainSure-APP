@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as Location from 'expo-location';
 import { CITY_CENTERS } from './mock-data';
 
@@ -11,6 +11,8 @@ export type UserLocation = {
   inService: boolean;
   status: LocationStatus;
   error: string | null;
+  /** Nom de la ville détectée (reverse geocoding), null tant qu'inconnu. */
+  cityName: string | null;
   retry: () => void;
 };
 
@@ -33,12 +35,40 @@ export function isInAfrica(c: Coords): boolean {
 // Fallback : centre d'Abidjan (Cocody) si la géoloc est refusée ou indisponible.
 const FALLBACK: Coords = CITY_CENTERS.abidjan;
 
+// Reverse geocode coords → city name (best-effort, silent on failure).
+async function lookupCity(c: Coords): Promise<string | null> {
+  try {
+    const res = await Location.reverseGeocodeAsync({ latitude: c.lat, longitude: c.lng });
+    const r = res[0];
+    return r?.city || r?.subregion || r?.region || null;
+  } catch {
+    return null;
+  }
+}
+
+// Shared across the whole app via <LocationProvider> so the GPS fetch +
+// reverse-geocode happen once, not once per screen that needs the position.
+const LocationContext = createContext<UserLocation | undefined>(undefined);
+
+export function LocationProvider({ children }: { children: ReactNode }) {
+  const value = useLocationState();
+  return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
+}
+
 export function useUserLocation(): UserLocation {
+  const ctx = useContext(LocationContext);
+  if (ctx) return ctx;
+  // Fallback for any screen rendered outside the provider (defensive).
+  return useLocationState();
+}
+
+function useLocationState(): UserLocation {
   const [coords, setCoords] = useState<Coords>(FALLBACK);
   const [isFallback, setIsFallback] = useState(true);
   const [status, setStatus] = useState<LocationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [inService, setInService] = useState(true);
+  const [cityName, setCityName] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
     setStatus('requesting');
@@ -50,27 +80,34 @@ export function useUserLocation(): UserLocation {
         setIsFallback(true);
         setCoords(FALLBACK);
         setInService(true); // fallback est Abidjan, donc dans la zone
+        setCityName(await lookupCity(FALLBACK));
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const real = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       const ok = isInAfrica(real);
-      setCoords(ok ? real : FALLBACK);
+      const used = ok ? real : FALLBACK;
+      setCoords(used);
       setIsFallback(!ok);
       setInService(ok);
       setStatus('granted');
+      setCityName(await lookupCity(used));
     } catch (e) {
       setStatus('error');
       setError(e instanceof Error ? e.message : 'Erreur de localisation.');
       setIsFallback(true);
       setCoords(FALLBACK);
       setInService(true);
+      setCityName(await lookupCity(FALLBACK));
     }
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  return { coords, isFallback, inService, status, error, retry: fetch };
+  return useMemo(
+    () => ({ coords, isFallback, inService, status, error, cityName, retry: fetch }),
+    [coords.lat, coords.lng, isFallback, inService, status, error, cityName, fetch]
+  );
 }
 
 // Haversine — distance en km entre deux points.

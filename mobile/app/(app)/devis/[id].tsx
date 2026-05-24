@@ -1,32 +1,61 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../../lib/theme';
-import { PROS } from '../../../lib/mock-data';
+import { type Pro } from '../../../lib/mock-data';
+import { fetchProDetail, createBooking } from '../../../lib/api';
+import { useProfile } from '../../../lib/profile';
+import { useUserLocation } from '../../../lib/location';
 import { AppHeader, Avatar, Button, Icon, SectionTitle } from '../../../components/ui';
 
 export default function Devis() {
   const router = useRouter();
   const { t } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const pro = PROS.find((p) => p.id === id) || PROS[0];
+  const { profile } = useProfile();
+  const location = useUserLocation();
+  const [pro, setPro] = useState<Pro | null>(null);
 
   const [description, setDescription] = useState('');
   const [urgency, setUrgency] = useState<'urgent' | 'today' | 'normal'>('normal');
-  const [address, setAddress] = useState('Cocody, Riviera 2');
-  const [photoCount, setPhotoCount] = useState(2);
+  const [address, setAddress] = useState('');
+  const [budget, setBudget] = useState('');
+  const [photoCount, setPhotoCount] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
   const valid = description.trim().length >= 10 && address.trim().length > 0;
+
+  useEffect(() => { if (id) fetchProDetail(id).then(setPro).catch(() => {}); }, [id]);
+  useEffect(() => { if (profile?.city && !address) setAddress(profile.city); }, [profile?.city]);
+
+  const submit = async () => {
+    if (!id || !valid || submitting) return;
+    setSubmitting(true);
+    const urgencyLabel = urgency === 'urgent' ? '[Urgent · sous 2h] ' : urgency === 'today' ? "[Aujourd'hui] " : '';
+    const budgetLabel = budget.trim() ? `\nBudget approximatif : ${budget.trim()} FCFA` : '';
+    try {
+      await createBooking({
+        proId: id,
+        description: `${urgencyLabel}${description.trim()}${budgetLabel}`,
+        address: address.trim(),
+        coords: location.coords,
+      });
+      router.replace('/(app)/(tabs)/requests');
+    } catch (e) {
+      Alert.alert('Erreur', e instanceof Error ? e.message : "Impossible d'envoyer la demande.");
+      setSubmitting(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: t.paper }}>
       <AppHeader title="Demande de devis" onBack={() => router.back()} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Avatar name={pro.fullName} size={44} accent={pro.accent} image={pro.avatar} />
+          <Avatar name={pro?.fullName ?? ''} size={44} accent={pro?.accent} image={pro?.avatar || undefined} />
           <View>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>{pro.name}</Text>
-            <Text style={{ fontSize: 12, color: t.fg2 }}>{pro.tags.join(' · ')} · Répond en {pro.responseTime}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: t.ink }}>{pro?.name ?? '…'}</Text>
+            <Text style={{ fontSize: 12, color: t.fg2 }}>{pro?.tags.join(' · ') ?? ''}</Text>
           </View>
         </View>
 
@@ -103,7 +132,7 @@ export default function Devis() {
         <SectionTitle title="Budget approximatif (optionnel)" />
         <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: t.line, backgroundColor: t.paper }}>
-            <TextInput placeholder="ex : 30 000" placeholderTextColor={t.fg3} keyboardType="numeric"
+            <TextInput value={budget} onChangeText={setBudget} placeholder="ex : 30 000" placeholderTextColor={t.fg3} keyboardType="numeric"
               style={{ flex: 1, fontSize: 15, color: t.ink }} />
             <Text style={{ fontSize: 13, color: t.fg2 }}>FCFA</Text>
           </View>
@@ -111,7 +140,7 @@ export default function Devis() {
       </ScrollView>
 
       <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: t.lineSoft, backgroundColor: t.paper }}>
-        <Button disabled={!valid} onPress={() => router.replace('/(app)/(tabs)/requests')}>
+        <Button disabled={!valid} loading={submitting} onPress={submit}>
           {valid ? 'Envoyer la demande' : 'Décris ton besoin pour envoyer'}
         </Button>
       </View>

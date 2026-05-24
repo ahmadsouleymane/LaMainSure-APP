@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
@@ -81,7 +82,7 @@ const memoryStore = (() => {
   };
 })();
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: Platform.OS === 'web' ? memoryStore : SecureStoreChunkedAdapter,
     autoRefreshToken: true,

@@ -3,6 +3,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, fonts } from '../../../lib/theme';
 import { Icon } from '../../../components/ui';
 
+// Recherche est l'écran d'entrée (plus de page d'accueil).
+export const unstable_settings = { initialRouteName: 'search' };
+
 export default function ClientTabs() {
   const { t } = useTheme();
   const insets = useSafeAreaInsets();
@@ -21,7 +24,6 @@ export default function ClientTabs() {
         },
         tabBarLabelStyle: { fontSize: 10, fontFamily: fonts.sansMedium },
       }}>
-      <Tabs.Screen name="index" options={{ title: 'Accueil', tabBarIcon: ({ color }) => <Icon name="home" size={22} color={color} /> }} />
       <Tabs.Screen name="search" options={{ title: 'Recherche', tabBarIcon: ({ color }) => <Icon name="search" size={22} color={color} /> }} />
       <Tabs.Screen name="requests" options={{ title: 'Demandes', tabBarIcon: ({ color }) => <Icon name="clipboard-list" size={22} color={color} /> }} />
       <Tabs.Screen name="messages" options={{ title: 'Messages', tabBarIcon: ({ color }) => <Icon name="message-circle" size={22} color={color} /> }} />

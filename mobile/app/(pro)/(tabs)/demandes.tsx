@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme, fonts } from '../../../lib/theme';
-import { PRO_INBOX } from '../../../lib/mock-data';
+import { fetchProInbox, type ProInbox } from '../../../lib/api';
 import { Avatar, Badge, Display, Icon } from '../../../components/ui';
 
 type Filter = 'all' | 'new' | 'pending';
@@ -11,13 +11,22 @@ export default function ProDemandes() {
   const router = useRouter();
   const { t } = useTheme();
   const [filter, setFilter] = useState<Filter>('all');
+  const [inbox, setInbox] = useState<ProInbox[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(useCallback(() => {
+    let alive = true;
+    setLoading(true);
+    fetchProInbox().then((x) => { if (alive) setInbox(x); }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []));
 
   const counts = {
-    all: PRO_INBOX.length,
-    new: PRO_INBOX.filter((d) => d.status === 'new').length,
-    pending: PRO_INBOX.filter((d) => d.status === 'pending').length,
+    all: inbox.length,
+    new: inbox.filter((d) => d.status === 'new').length,
+    pending: inbox.filter((d) => d.status === 'pending').length,
   };
-  const list = filter === 'all' ? PRO_INBOX : PRO_INBOX.filter((d) => d.status === filter);
+  const list = filter === 'all' ? inbox : inbox.filter((d) => d.status === filter);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: t.paper }} contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
@@ -47,7 +56,9 @@ export default function ProDemandes() {
       </View>
 
       <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 10 }}>
-        {list.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator color={t.ink} style={{ paddingVertical: 50 }} />
+        ) : list.length === 0 ? (
           <View style={{ paddingVertical: 60, alignItems: 'center', gap: 8 }}>
             <View style={{ width: 56, height: 56, borderRadius: 999, backgroundColor: t.paperSoft, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="clipboard-list" size={26} color={t.fg3} />

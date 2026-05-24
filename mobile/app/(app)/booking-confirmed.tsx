@@ -1,14 +1,17 @@
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../lib/theme';
-import { PROS } from '../../lib/mock-data';
+import { fetchProDetail } from '../../lib/api';
 import { Button, Display, Icon } from '../../components/ui';
 
 export default function BookingConfirmed() {
   const router = useRouter();
   const { t } = useTheme();
   const { proId, slot, service } = useLocalSearchParams<{ proId?: string; slot?: string; service?: string }>();
-  const pro = PROS.find((p) => p.id === proId);
+  const [pro, setPro] = useState<{ name: string } | null>(null);
+
+  useEffect(() => { if (proId) fetchProDetail(proId).then((p) => p && setPro({ name: p.name })).catch(() => {}); }, [proId]);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.paper, padding: 24, paddingBottom: 40, justifyContent: 'center', alignItems: 'center', gap: 14 }}>
@@ -27,9 +30,9 @@ export default function BookingConfirmed() {
         </View>
       ) : null}
       <View style={{ alignSelf: 'stretch', gap: 10, marginTop: 8 }}>
-        <Button onPress={() => router.replace('/(app)/chat/c1')}>Envoyer un message</Button>
-        <Pressable onPress={() => router.replace('/(app)/(tabs)')}>
-          <Text style={{ color: t.link, fontSize: 14, textAlign: 'center', paddingVertical: 8 }}>Retour à l'accueil</Text>
+        <Button onPress={() => router.replace('/(app)/(tabs)/requests')}>Voir mes demandes</Button>
+        <Pressable onPress={() => router.replace('/(app)/(tabs)/search')}>
+          <Text style={{ color: t.link, fontSize: 14, textAlign: 'center', paddingVertical: 8 }}>Retour à la recherche</Text>
         </Pressable>
       </View>
     </View>
