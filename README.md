@@ -39,3 +39,9 @@ npm run ios
 
 Voir `SPRINT0.md` pour le détail des étapes manuelles.
 # LaMainSure-APP
+
+---
+
+## 👤 Auteur
+
+**Ahmad Souleymane** — [@ahmadsouleymane](https://github.com/ahmadsouleymane)
